@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interaktives Abenteuer</title>
+  <style>
+    :root {
+      --primary: #BB86FC;
+      --bg-dark: #121212;
+      --bg-card: #1e1e1e;
+      --bg-hover: #2d2d2d;
+      --text-main: #e0e0e0;
+      --success: #4CAF50;
+      --danger: #f44336;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    
+    h1, h2, h3 { color: var(--primary); }
+    h3 { margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+
+    /* Stats & UI */
+    #stats {
+      display: flex;
+      justify-content: space-between;
+      background-color: var(--bg-card);
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 16px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .stat-value { font-weight: bold; color: var(--success); }
+    
+    #story-text {
+      background-color: var(--bg-card);
+      padding: 25px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      min-height: 120px;
+      font-size: 18px;
+      line-height: 1.8;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+
+    /* Buttons */
+    .choice-button {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      margin-bottom: 12px;
+      background-color: var(--bg-hover);
+      color: white;
+      border: 1px solid #444;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .choice-button:hover { background-color: #3a3a3a; border-color: var(--primary); }
+    #abbruch-button { background-color: var(--danger); margin-top: 20px; border: none; }
+    #abbruch-button:hover { background-color: #d32f2f; }
+
+    /* Parameter Grid */
+    .parameter-section { margin-bottom: 30px; }
+    .parameter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 12px;
+    }
+    .parameter-option {
+      background-color: var(--bg-card);
+      padding: 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .parameter-option:hover { background-color: var(--bg-hover); }
+    .parameter-option.selected {
+      background-color: rgba(187, 134, 252, 0.1);
+      border-color: var(--primary);
+      color: white;
+    }
+    .option-title { font-weight: bold; margin-bottom: 5px; display: block; color: var(--primary); }
+    .option-desc { font-size: 13px; color: #aaa; }
+
+    /* Modals */
+    .modal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: none; justify-content: center; align-items: center; z-index: 100;
+    }
+    .modal.active { display: flex; }
+    .modal-content {
+      background-color: var(--bg-card); padding: 30px;
+      border-radius: 10px; width: 90%; max-width: 500px; text-align: center;
+    }
+    
+    @media (max-width: 600px) {
+      .parameter-grid { grid-template-columns: 1fr; }
+      #stats { flex-wrap: wrap; gap: 10px; justify-content: space-around; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="parameter-screen" class="screen active">
+    <h1>Die Reise beginnt</h1>
+    <p>Definieren Sie die Parameter Ihrer Geschichte. Wählen Sie aus jeder Kategorie eine Eigenschaft.</p>
+    
+    <div id="parameter-container">
+      </div>
+
+    <button id="start-game" class="choice-button" style="background-color: #BB86FC; color: #121212; font-weight: bold; font-size: 18px; margin-top: 30px;">
+      Spiel starten
+    </button>
+  </div>
+
+  <div id="game-screen" class="screen">
+    <div id="stats">
+      <div class="stat">Mut: <span id="stat-mut" class="stat-value">0</span></div>
+      <div class="stat">Logik: <span id="stat-logik" class="stat-value">0</span></div>
+      <div class="stat">Empathie: <span id="stat-empathie" class="stat-value">0</span></div>
+      <div class="stat">Gerechtigkeit: <span id="stat-gerechtigkeit" class="stat-value">0</span></div>
+    </div>
+    <div id="story-text"></div>
+    <div id="choices"></div>
+    <button id="abbruch-button" class="choice-button">Spiel pausieren / Menü</button>
+  </div>
+
+  <div id="abbruch-menu" class="modal">
+    <div class="modal-content">
+      <h2>Menü</h2>
+      <button id="weiterspielen" class="choice-button">Zurück zum Spiel</button>
+      <button id="neu-starten" class="choice-button">Neu starten</button>
+    </div>
+  </div>
+
+  <script type="application/json" id="parameters">
+    {
+      "alter": [
+        {"value": "jung", "label": "Aufstrebend (20-35)", "desc": "Voller Tatendrang, idealistisch und bereit, die Welt zu erobern."},
+        {"value": "mitte", "label": "Etabliert (35-55)", "desc": "Erfahren, strategisch denkend und fest im Leben stehend."},
+        {"value": "erfahren", "label": "Erfahrener Profi (55-70)", "desc": "Jahrzehntelange Expertise, pragmatisch und krisenerprobt."},
+        {"value": "senior", "label": "Weiser Ältester (70+)", "desc": "Über den Dingen stehend, reflektiert und von tiefer Lebensweisheit geprägt."}
+      ],
+      "beruf": [
+        {"value": "detektiv", "label": "Ermittler", "desc": "Analysiert Fakten, sucht nach verborgenen Motiven."},
+        {"value": "kuenstler", "label": "Künstler", "desc": "Sieht Muster und emotionale Tiefen, die andere übersehen."},
+        {"value": "forscher", "label": "Wissenschaftler", "desc": "Hinterfragt Dogmen, verlässt sich auf Empirie und Logik."},
+        {"value": "handwerker", "label": "Handwerker", "desc": "Praktisch veranlagt, lösungsorientiert und erdverbunden."},
+        {"value": "arzt", "label": "Mediziner", "desc": "Bewahrt Ruhe in Krisen, heilt und versteht die menschliche Natur."},
+        {"value": "mentor", "label": "Mentor/Lehrer", "desc": "Gibt Wissen weiter, erkennt das Potenzial in anderen."},
+        {"value": "ingenieur", "label": "Ingenieur", "desc": "Strukturiert, plant vorausschauend und baut Systeme."},
+        {"value": "philosoph", "label": "Schriftsteller/Philosoph", "desc": "Versteht die Macht der Worte und die Tiefen der menschlichen Seele."}
+      ],
+      "genre": [
+        {"value": "high_fantasy", "label": "High Fantasy", "desc": "Eine Welt voller Magie, alter Mythen und epischer Konflikte."},
+        {"value": "cyberpunk", "label": "Cyberpunk", "desc": "Eine dystopische Zukunft voller Technologie und moralischem Verfall."},
+        {"value": "noir", "label": "Noir Krimi", "desc": "Zynisch, düster, in regnerischen Gassen voller moralischer Grauzonen."},
+        {"value": "real_life", "label": "Real-Life Thriller", "desc": "Spannung in der echten Welt, politisch oder gesellschaftlich relevant."},
+        {"value": "historisch", "label": "Historischer Roman", "desc": "Eine vergangene Epoche, reich an authentischen Details und Intrigen."},
+        {"value": "scifi", "label": "Science-Fiction", "desc": "Die Weiten des Alls, Erstkontakt und philosophische Zukunftsfragen."},
+        {"value": "psycho", "label": "Psychothriller", "desc": "Ein Spiel mit dem Verstand, bei dem nichts ist, wie es scheint."},
+        {"value": "mystik", "label": "Mystisches Abenteuer", "desc": "Spirituelle Geheimnisse, alte Klöster und die Suche nach dem Innersten."}
+      ],
+      "fokus": [
+        {"value": "empathie", "label": "Empathie", "desc": "Das Verstehen und Fühlen der Mitmenschen steht an erster Stelle."},
+        {"value": "logik", "label": "Logik", "desc": "Kühle Analyse und Rationalität lenken die Entscheidungen."},
+        {"value": "mut", "label": "Mut", "desc": "Bereitschaft, Risiken einzugehen und sich Ängsten zu stellen."},
+        {"value": "gerechtigkeit", "label": "Gerechtigkeit", "desc": "Ein unerschütterlicher moralischer Kompass für Richtig und Falsch."},
+        {"value": "weisheit", "label": "Weisheit", "desc": "Die Fähigkeit, das große Ganze zu betrachten und langfristig zu denken."},
+        {"value": "pragmatismus", "label": "Pragmatismus", "desc": "Der Zweck heiligt oft die Mittel; Fokus auf das Machbare."},
+        {"value": "spiritualitaet", "label": "Spiritualität", "desc": "Vertrauen auf eine höhere Ordnung oder innere Eingebung."},
+        {"value": "harmonie", "label": "Harmonie", "desc": "Streben nach Ausgleich, Deeskalation und innerem Frieden."}
+      ],
+      "stil": [
+        {"value": "poetisch", "label": "Poetisch", "desc": "Bildreich, metaphorisch und sprachlich elegant."},
+        {"value": "sachlich", "label": "Sachlich-Präzise", "desc": "Klar, ohne Umschweife, fokussiert auf die Fakten."},
+        {"value": "episch", "label": "Episch-Dramatisch", "desc": "Große Gesten, schicksalhafte Beschreibungen."},
+        {"value": "ironisch", "label": "Ironisch-Zynisch", "desc": "Mit einem Augenzwinkern und einer Prise schwarzem Humor."},
+        {"value": "mystisch", "label": "Mystisch-Tiefgründig", "desc": "Rätselhaft, symbolisch, inspiriert von alten Denkern."},
+        {"value": "philosophisch", "label": "Philosophisch", "desc": "Reflektierend, hinterfragend, nach dem 'Warum' suchend."},
+        {"value": "melancholisch", "label": "Melancholisch", "desc": "Schwermütig, nachdenklich, mit einem Sinn für Vergänglichkeit."},
+        {"value": "spannend", "label": "Atemlos-Spannend", "desc": "Kurze Sätze, hohes Tempo, treibende Handlung."}
+      ],
+      "konsequenz": [
+        {"value": "sanft", "label": "Verzeihend", "desc": "Fehler sind Lektionen. Das Spiel bietet immer einen Ausweg."},
+        {"value": "realistisch", "label": "Realistisch", "desc": "Entscheidungen haben logische, greifbare Konsequenzen."},
+        {"value": "hart", "label": "Unnachgiebig", "desc": "Ein falscher Schritt kann schwerwiegende Verluste bedeuten."},
+        {"value": "unvorhersehbar", "label": "Chaotisch", "desc": "Der Zufall (oder das Schicksal) greift oft unerwartet ein."},
+        {"value": "karmisch", "label": "Karmisch", "desc": "Jede noch so kleine ethische Entscheidung spiegelt sich später wider."},
+        {"value": "extrem", "label": "Gnadenlos", "desc": "Nur perfekte Überlegung führt zum Ziel. Jeder Fehler wird bestraft."}
+      ],
+      "ziel": [
+        {"value": "wissen", "label": "Die Wahrheit finden", "desc": "Fakten aufdecken und intellektuelle Rätsel lösen."},
+        {"value": "ethik", "label": "Ein Dilemma lösen", "desc": "Schwierige moralische Konflikte navigieren."},
+        {"value": "entspannung", "label": "Innere Ruhe", "desc": "Eine meditative Reise zur eigenen Mitte."},
+        {"value": "nervenkitzel", "label": "Adrenalin", "desc": "Gefahren überstehen und Feinde besiegen."},
+        {"value": "erleuchtung", "label": "Spirituelle Erleuchtung", "desc": "Das Ego überwinden und tiefere Erkenntnis erlangen."},
+        {"value": "lebenswerk", "label": "Ein Lebenswerk vollenden", "desc": "Etwas Bleibendes schaffen, das die Zeit überdauert."},
+        {"value": "geheimnis", "label": "Ein Mysterium lüften", "desc": "Verborgenes Wissen aus uralten Zeiten bergen."},
+        {"value": "helfen", "label": "Anderen dienen", "desc": "Die Welt für die nächste Generation ein Stück besser machen."}
+      ]
+    }
+  </script>
+
+  <script type="application/json" id="scenes">
+    {
+      "scenes": {
+        "start": {
+          "text": "Willkommen zu Ihrer Reise. Als {ALTER_LABEL} {BERUF_LABEL} betreten Sie eine Welt, die von {GENRE_LABEL} geprägt ist. Ihr Verstand stützt sich auf {FOKUS_LABEL}. Ihr tiefstes Bestreben ist es, {ZIEL_LABEL}.\n\nVor Ihnen liegt {GENRE_SPECIFIC_OBJECT}. Die Stille im Raum ist greifbar.",
+          "choices": [
+            {"text": "Die Situation analysieren", "nextScene": "1"},
+            {"text": "Instinktiv handeln und zugreifen", "nextScene": "2"}
+          ]
+        },
+        "1": {
+          "text": "Mit der Geduld und der Übersicht Ihrer Erfahrung untersuchen Sie die Umgebung. Es scheint, als ob {GENRE_SPECIFIC_OBJECT} eine verborgene Mechanik verbirgt.",
+          "choices": [
+            {"text": "Den Mechanismus vorsichtig betätigen", "nextScene": "2", "condition": {"stat": "logik", "value": 0}},
+            {"text": "Einen Schritt zurücktreten und abwarten", "nextScene": "start"}
+          ],
+          "onEnter": { "updateStats": {"logik": 5, "weisheit": 2} }
+        },
+        "2": {
+          "text": "Ihre Handlung setzt eine Kettenreaktion in Gang. Das {GENRE_SPECIFIC_OBJECT} öffnet sich und offenbart eine Wahrheit, die Ihren Fokus auf {FOKUS_LABEL} herausfordert. (Dies ist das Ende des Prologs - Erweitere die Szenen im Code!)",
+          "choices": [
+            {"text": "Spiel von vorne beginnen", "nextScene": "start"}
+          ],
+          "onEnter": { "updateStats": {"mut": 5} }
+        }
+      },
+      "sceneVars": {
+        "GENRE_SPECIFIC_OBJECT": {
+          "high_fantasy": "ein in altes Leder gebundenes, pulsierendes Zauberbuch",
+          "cyberpunk": "ein verschlüsseltes, biometrisches Datenlaufwerk",
+          "noir": "eine unbeschriftete Akte mit blutigen Fingerabdrücken",
+          "real_life": "ein versiegelter Notariatsbrief",
+          "historisch": "ein königliches Siegel aus schwerem Wachs",
+          "scifi": "ein fremdartiges, schwebendes Artefakt aus dunkler Materie",
+          "psycho": "ein Spiegel, in dem die Reflexion eine Sekunde verzögert ist",
+          "mystik": "ein schlichtes Holzkreuz, das eine unerklärliche Wärme ausstrahlt"
+        }
+      }
+    }
+  </script>
+
+  <script>
+    let gameState = {
+      selectedParameters: {},
+      currentScene: "start",
+      stats: { mut: 0, logik: 0, empathie: 0, gerechtigkeit: 0, weisheit: 0 }
+    };
+
+    const DOM = {
+      paramScreen: document.getElementById('parameter-screen'),
+      gameScreen: document.getElementById('game-screen'),
+      storyText: document.getElementById('story-text'),
+      choices: document.getElementById('choices'),
+      paramContainer: document.getElementById('parameter-container')
+    };
+
+    // Daten laden
+    const parameters = JSON.parse(document.getElementById('parameters').textContent);
+    const scenesData = JSON.parse(document.getElementById('scenes').textContent);
+
+    const categoryTitles = {
+      "alter": "Lebensphase",
+      "beruf": "Berufung & Expertise",
+      "genre": "Szenario & Welt",
+      "fokus": "Moralischer Kompass",
+      "stil": "Narrative Stimme",
+      "konsequenz": "Regeln des Schicksals",
+      "ziel": "Innerer Antrieb"
+    };
+
+    // Parameter-Auswahl dynamisch aufbauen
+    function initParameterUI() {
+      Object.keys(parameters).forEach(category => {
+        const section = document.createElement('div');
+        section.className = 'parameter-section';
+        
+        const title = document.createElement('h3');
+        title.textContent = categoryTitles[category] || category;
+        section.appendChild(title);
+
+        const grid = document.createElement('div');
+        grid.className = 'parameter-grid';
+
+        parameters[category].forEach(option => {
+          const btn = document.createElement('div');
+          btn.className = 'parameter-option';
+          btn.innerHTML = `<span class="option-title">${option.label}</span><span class="option-desc">${option.desc}</span>`;
+          btn.onclick = () => {
+            Array.from(grid.children).forEach(c => c.classList.remove('selected'));
+            btn.classList.add('selected');
+            gameState.selectedParameters[category] = option.value;
+          };
+          grid.appendChild(btn);
+        });
+
+        section.appendChild(grid);
+        DOM.paramContainer.appendChild(section);
+      });
+    }
+
+    // Spielstart prüfen
+    document.getElementById('start-game').onclick = () => {
+      const required = Object.keys(parameters).length;
+      const selected = Object.keys(gameState.selectedParameters).length;
+      
+      if (selected === required) {
+        DOM.paramScreen.classList.remove('active');
+        DOM.gameScreen.classList.add('active');
+        // Setze Stats zurück
+        gameState.stats = { mut: 0, logik: 0, empathie: 0, gerechtigkeit: 0, weisheit: 0 };
+        renderScene("start");
+      } else {
+        alert(`Bitte wählen Sie in jeder der ${required} Kategorien eine Eigenschaft aus. Sie haben erst ${selected} gewählt.`);
+      }
+    };
+
+    function renderScene(sceneId) {
+      gameState.currentScene = sceneId;
+      const scene = scenesData.scenes[sceneId];
+      if (!scene) return;
+
+      // Stats aktualisieren
+      if (scene.onEnter && scene.onEnter.updateStats) {
+        Object.entries(scene.onEnter.updateStats).forEach(([stat, val]) => {
+          if(gameState.stats[stat] !== undefined) {
+             gameState.stats[stat] += val;
+          }
+        });
+      }
+      updateStatsUI();
+
+      // Text parsen (Platzhalter ersetzen)
+      let text = scene.text;
+      
+      // 1. Parameter Labels ersetzen
+      Object.entries(gameState.selectedParameters).forEach(([key, value]) => {
+        const p = parameters[key].find(opt => opt.value === value);
+        if(p) {
+          text = text.replace(new RegExp(`{${key.toUpperCase()}_LABEL}`, 'g'), p.label);
+          text = text.replace(new RegExp(`{${key.toUpperCase()}_DESC}`, 'g'), p.desc);
+        }
+      });
+
+      // 2. Genre-spezifische Variablen ersetzen (mit Fallback auf 'real_life', falls Genre nicht gefunden)
+      const genre = gameState.selectedParameters.genre || 'real_life';
+      Object.entries(scenesData.sceneVars).forEach(([varName, options]) => {
+        // Fallback-Sicherheit eingebaut:
+        const replacement = options[genre] || options['real_life'] || "etwas Unerwartetes";
+        text = text.replace(new RegExp(`{${varName}}`, 'g'), replacement);
+      });
+
+      // Zeilenumbrüche (\n) in HTML (<br>) umwandeln
+      DOM.storyText.innerHTML = text.replace(/\n/g, '<br>');
+      
+      // Buttons generieren
+      DOM.choices.innerHTML = '';
+      scene.choices.forEach(choice => {
+        const btn = document.createElement('button');
+        btn.className = 'choice-button';
+        btn.textContent = choice.text;
+        btn.onclick = () => renderScene(choice.nextScene);
+        DOM.choices.appendChild(btn);
+      });
+    }
+
+    function updateStatsUI() {
+      document.getElementById('stat-mut').textContent = gameState.stats.mut || 0;
+      document.getElementById('stat-logik').textContent = gameState.stats.logik || 0;
+      document.getElementById('stat-empathie').textContent = gameState.stats.empathie || 0;
+      document.getElementById('stat-gerechtigkeit').textContent = gameState.stats.gerechtigkeit || 0;
+    }
+
+    // Menü-Logik
+    const abbruchMenu = document.getElementById('abbruch-menu');
+    document.getElementById('abbruch-button').onclick = () => abbruchMenu.classList.add('active');
+    document.getElementById('weiterspielen').onclick = () => abbruchMenu.classList.remove('active');
+    document.getElementById('neu-starten').onclick = () => {
+      abbruchMenu.classList.remove('active');
+      DOM.gameScreen.classList.remove('active');
+      DOM.paramScreen.classList.add('active');
+      gameState.selectedParameters = {};
+      document.querySelectorAll('.parameter-option').forEach(el => el.classList.remove('selected'));
+    };
+
+    // Initialisierung beim Laden
+    document.addEventListener('DOMContentLoaded', initParameterUI);
+  </script>
+</body>
+</html>
